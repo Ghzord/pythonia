@@ -1,0 +1,94 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto Esperança | Envelhecimento facial</title>
+<style>
+* { box-sizing: border-box; }
+body { font-family: Arial, sans-serif; background: #f4f6f9; color: #23352e; margin: 0; padding: 32px 16px; }
+main { background: white; padding: 32px; border-radius: 16px; max-width: 850px; margin: auto; box-shadow: 0 4px 18px #0001; }
+h1 { margin-top: 0; } p { line-height: 1.6; }
+label { display: block; margin: 20px 0 8px; } input[type=file] { max-width: 100%; }
+input[type=range] { width: min(100%, 350px); }
+button, .download { display: inline-block; background: #1b4d3e; color: white; padding: 12px 20px; border: 0; border-radius: 6px; font-size: 16px; cursor: pointer; margin-top: 20px; }
+button:disabled { opacity: .6; cursor: wait; }
+.results { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+img { width: 100%; max-height: 450px; object-fit: contain; border-radius: 8px; background: #f4f6f9; }
+figure { margin: 0; } figcaption { padding: 12px 0; }
+#status { min-height: 26px; } .error { color: #a32626; }
+[hidden] { display: none !important; }
+small { display: block; line-height: 1.6; color: #53635c; margin-top: 24px; }
+@media(max-width: 550px) { main { padding: 20px; } .results { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Projeto Esperança</h1>
+<p>Como seria um rosto mais velho? Envie uma foto de frente, bem iluminada e com uma pessoa.</p>
+<form id="upload" action="/api/envelhecer" method="post" enctype="multipart/form-data">
+<label for="file">Sua foto (JPG, PNG ou WebP, até 10 MB)</label>
+<input id="file" type="file" name="file" accept="image/jpeg,image/png,image/webp" required>
+<label for="idade">Idade sugerida: <output id="anos">70</output> anos</label>
+<input id="idade" name="idade" type="range" min="40" max="90" value="70">
+<p>A idade orienta a textura de envelhecimento da pele e o grisalho gradual. O tratamento mantém a foto como base e protege as regiões centrais dos olhos, nariz e boca.</p>
+<br><button id="gerar" type="submit">Gerar rosto mais velho</button>
+</form>
+<p id="status" role="status" aria-live="polite"></p>
+<section id="resultado" hidden aria-label="Comparação das fotos">
+<div class="results">
+<figure><figcaption>Foto original</figcaption><img id="original" alt="Foto enviada"></figure>
+<figure><figcaption>Simulação de envelhecimento</figcaption><img id="aged" alt="Foto com marcas de envelhecimento"></figure>
+</div>
+<a id="download" class="download" download="simulacao-envelhecida.png">Baixar simulação</a>
+</section>
+<small>A IA separa cabelo e pele e gera uma referência de textura. O resultado combina essa textura com a foto original. A idade é uma referência artística: o sistema não estima a idade atual e a segmentação pode falhar em cabelos finos, acessórios ou iluminação difícil. As fotos ficam neste computador. Use fotos com autorização.</small>
+</main>
+<script>
+const form = document.querySelector('#upload');
+const button = document.querySelector('#gerar');
+const statusText = document.querySelector('#status');
+document.querySelector('#idade').addEventListener('input', event => {
+    document.querySelector('#anos').value = event.target.value;
+});
+form.addEventListener('submit', async event => {
+    event.preventDefault();
+    statusText.className = '';
+    document.querySelector('#resultado').hidden = true;
+    const file = document.querySelector('#file').files[0];
+    if (!file || file.size > 10 * 1024 * 1024) {
+        statusText.textContent = 'Selecione uma foto de até 10 MB.';
+        return;
+    }
+    button.disabled = true;
+    form.setAttribute('aria-busy', 'true');
+    const inicio = Date.now();
+    const atualizarTempo = () => {
+        const segundos = Math.floor((Date.now() - inicio) / 1000);
+        statusText.textContent = `Tratando a pele e o cabelo… ${segundos} s. Aguarde; esta versão usa modelos de IA e pode levar alguns minutos.`;
+    };
+    atualizarTempo();
+    const relogio = setInterval(atualizarTempo, 1000);
+    try {
+        const response = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.erro || 'Não foi possível processar a foto.');
+        document.querySelector('#original').src = data.original;
+        document.querySelector('#aged').src = data.aged;
+        document.querySelector('#download').href = data.aged;
+        document.querySelector('#resultado').hidden = false;
+        statusText.textContent = data.reutilizado
+            ? 'Esta foto já foi gerada com essas opções. Exibindo o resultado salvo.'
+            : `Simulação pronta em ${Math.round((Date.now() - inicio) / 1000)} segundos.`;
+    } catch (error) {
+        statusText.className = 'error';
+        statusText.textContent = error instanceof TypeError ? 'A conexão com o Python foi interrompida. Confira se o app continua aberto.' : error.message;
+    } finally {
+        clearInterval(relogio);
+        button.disabled = false;
+        form.removeAttribute('aria-busy');
+    }
+});
+</script>
+</body>
+</html>

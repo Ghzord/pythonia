@@ -1,0 +1,6 @@
+﻿.venv/
+__pycache__/
+modelos/
+static/uploads/
+.pacotes/
+resultados_benchmark/
